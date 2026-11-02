@@ -6,9 +6,9 @@ module;
 #include <optional>
 #include <print>
 #include <ranges>
+#include <stdexcept>
 #include <utility>
 #include <vector>
-#include <stdexcept>
 
 export module jagged_array_matrix;
 
@@ -40,7 +40,7 @@ public:
 
   JaggedArrayMatrix& operator+=(const JaggedArrayMatrix& rhs) & {
     if (!are_same_shaped(rhs)) {
-      throw std::invalid_argument("matrices must be the same shape");
+      throw std::invalid_argument("matrices must be same shaped");
     }
 
     auto rows = array_.rows();
@@ -56,7 +56,7 @@ public:
 
   JaggedArrayMatrix& operator-=(const JaggedArrayMatrix& rhs) & {
     if (!are_same_shaped(rhs)) {
-      throw std::invalid_argument("matrices must be the same shape");
+      throw std::invalid_argument("matrices must be same shaped");
     }
 
     auto rows = array_.rows();
