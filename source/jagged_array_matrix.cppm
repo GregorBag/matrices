@@ -238,9 +238,7 @@ public:
       }
 
       if (k != k_prime) {
-        for (std::size_t i : std::views::iota(0uz, rows)) {
-          std::swap(a[k, i], a[k_prime, i]);
-        }
+        swap_rows(k, k_prime);
         sign = -sign;
       }
 
