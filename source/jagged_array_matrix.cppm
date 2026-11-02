@@ -70,6 +70,64 @@ public:
     return *this;
   }
 
+  JaggedArrayMatrix& operator*=(const T& rhs) & {
+    auto rows = array_.rows();
+    auto cols = array_.cols();
+    for (std::size_t i : std::views::iota(0uz, rows)) {
+      for (std::size_t j : std::views::iota(0uz, cols)) {
+        (*this)[i, j] *= rhs;
+      }
+    }
+
+    return *this;
+  }
+
+  static JaggedArrayMatrix sum(const JaggedArrayMatrix& lhs, const JaggedArrayMatrix& rhs) {
+    auto tmp = lhs;
+    tmp += rhs;
+    return tmp;
+  }
+
+  static JaggedArrayMatrix diff(const JaggedArrayMatrix& lhs, const JaggedArrayMatrix& rhs) {
+    auto tmp = lhs;
+    tmp -= rhs;
+    return tmp;
+  }
+
+  static JaggedArrayMatrix scale(const T& lhs, const JaggedArrayMatrix& rhs) {
+    auto tmp = rhs;
+    tmp *= lhs;
+    return tmp;
+  }
+
+  static JaggedArrayMatrix scale(const JaggedArrayMatrix& lhs, const T& rhs) {
+    auto tmp = lhs;
+    tmp *= rhs;
+    return tmp;
+  }
+
+  static JaggedArrayMatrix product(const JaggedArrayMatrix& lhs, const JaggedArrayMatrix& rhs) {
+    auto left_rows = lhs.rows();
+    auto left_cols = lhs.cols();
+    auto right_rows = rhs.rows();
+    auto right_cols = rhs.cols();
+
+    if (left_cols != right_rows) {
+      throw std::invalid_argument("multiplication is not defined for such matrices");
+    }
+
+    JaggedArrayMatrix tmp{left_rows, right_cols, T{0}};
+    for (std::size_t i : std::views::iota(0uz, left_rows)) {
+      for (std::size_t k : std::views::iota(0uz, left_cols)) {
+        for (std::size_t j : std::views::iota(0uz, right_cols)) {
+          tmp[i, j] += lhs[i, k] * rhs[k, j];
+        }
+      }
+    }
+
+    return tmp;
+  }
+
   std::size_t rows() const { return array_.rows(); }
   std::size_t cols() const { return array_.cols(); }
 
