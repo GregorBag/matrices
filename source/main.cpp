@@ -1,9 +1,9 @@
 #include <cstddef>
 #include <iostream>
-#include <print>
-#include <string>
 #include <optional>
+#include <print>
 #include <ranges>
+#include <string>
 #include <vector>
 
 import jagged_array_matrix;
@@ -17,12 +17,13 @@ int main() {
 
   auto n = result.value();
   std::vector<double> v;
-  
+
   std::size_t element_count = 0;
   for (auto _ : std::views::iota(0uz, n * n)) {
     auto value = util::read_value<double>();
     if (!value) {
-      std::println(stderr, "error: expected {} arguments for {}x{} matrix, got {}.", n * n, n, n, element_count);
+      std::println(stderr, "error: expected {} arguments for {}x{} matrix, got {}.", n * n, n, n,
+                   element_count);
       return 1;
     }
     v.push_back(*value);
