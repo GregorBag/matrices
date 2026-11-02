@@ -159,8 +159,8 @@ public:
     T max_elem = std::fabs(array_[0, 0]);
     for (std::size_t i : std::views::iota(0uz, rows)) {
       for (std::size_t j : std::views::iota(0uz, cols)) {
-        if (max_elem < std::fabs((array_[i, j]))) {
-          max_elem = std::fabs(array_[i, j]);
+        if (max_elem < std::fabs(((*this))[i, j])) {
+          max_elem = std::fabs((*this)[i, j]);
         }
       }
     }
@@ -178,7 +178,7 @@ public:
     auto cols = array_.cols();
     for (std::size_t i : std::views::iota(0uz, rows)) {
       for (std::size_t j : std::views::iota(0uz, cols)) {
-        std::print(os, "{:8.3f}", array_[i, j]);
+        std::print(os, "{:8.3f}", (*this)[i, j]);
       }
       std::println(os);
     }
