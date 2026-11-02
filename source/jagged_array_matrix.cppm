@@ -82,6 +82,28 @@ public:
     return *this;
   }
 
+  friend bool operator==(const JaggedArrayMatrix& lhs, const JaggedArrayMatrix& rhs) {
+    if (&lhs == &rhs) {
+      return true;
+    }
+
+    if (!lhs.are_same_shaped(rhs)) {
+      return false;
+    }
+
+    auto rows = lhs.rows();
+    auto cols = lhs.cols();
+    for (std::size_t i : std::views::iota(0uz, rows)) {
+      for (std::size_t j : std::views::iota(0uz, cols)) {
+        if (lhs[i, j] != rhs[i, j]) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  }
+
   static JaggedArrayMatrix sum(const JaggedArrayMatrix& lhs, const JaggedArrayMatrix& rhs) {
     auto tmp = lhs;
     tmp += rhs;
