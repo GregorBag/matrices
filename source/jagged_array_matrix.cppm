@@ -137,7 +137,7 @@ public:
     T max_elem = std::fabs(array_[0, 0]);
     for (std::size_t i : std::views::iota(0uz, rows)) {
       for (std::size_t j : std::views::iota(0uz, cols)) {
-        if (max_elem > std::fabs((array_[i, j]))) {
+        if (max_elem < std::fabs((array_[i, j]))) {
           max_elem = std::fabs(array_[i, j]);
         }
       }
