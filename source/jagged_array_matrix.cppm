@@ -3,10 +3,12 @@ module;
 #include <cmath>
 #include <cstddef>
 #include <iostream>
+#include <limits>
 #include <optional>
 #include <print>
 #include <ranges>
 #include <stdexcept>
+#include <type_traits>
 #include <utility>
 #include <vector>
 
@@ -246,9 +248,14 @@ public:
       T p{0};
       for (std::size_t i : std::views::iota(k, rows)) {
         if (std::abs(a[i, k]) > p) {
-          p = a[i, k];
+          p = std::abs(a[i, k]);
           k_prime = i;
         }
+      }
+      
+      auto max_elem = get_max_elem();
+      if (cmp::are_equal(p, T{0}, max_elem * rows * std::numeric_limits<T>::epsilon())) {
+        break;
       }
 
       if (k != k_prime) {
@@ -267,53 +274,26 @@ public:
     return std::pair{std::move(a), swaps};
   }
 
-  std::optional<T> det() {
-    auto rows = array_.rows();
-    auto cols = array_.cols();
-    if (rows != cols) {
+  std::optional<T> det() const {
+    T det = T{1};
+    if constexpr (std::is_floating_point_v<T>) {
+      auto lup = lup_decompose();
+      if (!lup) {
+        return std::nullopt;
+      }
+
+      auto& [decomp, swaps] = *lup;
+      auto sign = (swaps % 2) ? T{-1} : T{1};
+      auto n = decomp.rows();
+      for (std::size_t i : std::views::iota(0uz, n)) {
+        det *= decomp[i, i];
+      }
+
+      return sign * det;
+    }
+    else if constexpr (std::is_integral_v<T>) {
       return std::nullopt;
     }
-
-    if (!rows) {
-      return T{1};
-    }
-
-    T sign = T{1};
-    JaggedArrayMatrix a = *this;
-
-    for (std::size_t k : std::views::iota(0uz, rows)) {
-      std::size_t k_prime = k;
-      T p = T{0};
-      for (std::size_t i : std::views::iota(k, rows)) {
-        if (std::abs(a[i, k]) > p) {
-          p = a[i, k];
-          k_prime = i;
-        }
-      }
-
-      if (cmp::are_equal(p, T{0}, get_max_elem(), rows)) {
-        return T{0};
-      }
-
-      if (k != k_prime) {
-        swap_rows(k, k_prime);
-        sign = -sign;
-      }
-
-      for (std::size_t i : std::views::iota(k + 1, rows)) {
-        a[i, k] = a[i, k] / a[k, k];
-        for (std::size_t j : std::views::iota(k + 1, rows)) {
-          a[i, j] -= a[i, k] * a[k, j];
-        }
-      }
-    }
-
-    T d = sign;
-    for (std::size_t k : std::views::iota(0uz, rows)) {
-      d *= a[k, k];
-    }
-
-    return d;
   }
 
 private:

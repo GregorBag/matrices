@@ -38,9 +38,10 @@ int main() {
 
   matrices::JaggedArrayMatrix<double> matrix(n, n, v.begin(), v.end());
 
-  auto d = matrix.determinant();
+  auto d = matrix.det();
   if (!d) {
     std::println(stderr, "error: is not a square matrix");
+    return 1;
   }
 
   std::println("{}", *d);
