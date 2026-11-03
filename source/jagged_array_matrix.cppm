@@ -215,7 +215,7 @@ public:
     return *this;
   }
 
-  std::optional<T> trace() const {
+  std::optional<T> tr() const {
     auto rows = array_.rows();
     auto cols = array_.cols();
     if (rows != cols) {
@@ -231,7 +231,43 @@ public:
     return trace;
   }
 
-  std::optional<T> determinant() {
+  std::optional<std::pair<JaggedArrayMatrix, std::size_t>> lup_decompose() const {
+    auto rows = array_.rows();
+    auto cols = array_.cols();
+    if (rows != cols) {
+      return std::nullopt;
+    }
+
+    std::size_t swaps = 0;
+    JaggedArrayMatrix a{*this};
+
+    for (std::size_t k : std::views::iota(0uz, rows)) {
+      std::size_t k_prime = k;
+      T p{0};
+      for (std::size_t i : std::views::iota(k, rows)) {
+        if (std::abs(a[i, k]) > p) {
+          p = a[i, k];
+          k_prime = i;
+        }
+      }
+
+      if (k != k_prime) {
+        a.swap_rows(k, k_prime);
+        ++swaps;
+      }
+
+      for (std::size_t i : std::views::iota(k + 1, rows)) {
+        a[i, k] /= a[k, k];
+        for (std::size_t j : std::views::iota(k + 1, rows)) {
+          a[i, j] -= a[i, k] * a[k, j];
+        }
+      }
+    }
+
+    return std::pair{std::move(a), swaps};
+  }
+
+  std::optional<T> det() {
     auto rows = array_.rows();
     auto cols = array_.cols();
     if (rows != cols) {
