@@ -253,7 +253,7 @@ public:
     }
 
     std::size_t swaps = 0;
-    JaggedArrayMatrix a{*this};
+    JaggedArrayMatrix a = *this;
 
     for (std::size_t k : std::views::iota(0uz, rows)) {
       std::size_t k_prime = k;
@@ -264,8 +264,8 @@ public:
           k_prime = i;
         }
       }
-      
-      auto max_elem = get_max_elem();
+
+      auto max_elem = a.get_max_elem();
       if (cmp::are_equal(p, T{0}, max_elem * rows * std::numeric_limits<T>::epsilon())) {
         break;
       }
