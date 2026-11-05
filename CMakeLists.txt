@@ -4,7 +4,10 @@ project(hwmn LANGUAGES CXX)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-option(BUILD_TESTS "Build tests" OFF)
+option(BUILD_TESTS "Build tests" ON)
+
+include(cmake/CPM.cmake)
+include(cmake/third_party.cmake)
 
 add_library(matrices STATIC)
 target_sources(matrices
