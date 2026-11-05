@@ -286,6 +286,48 @@ public:
     return std::pair{std::move(a), swaps};
   }
 
+  std::optional<std::pair<JaggedArrayMatrix, std::size_t>> bareiss_decompose() const {
+    auto rows = array_.rows();
+    auto cols = array_.cols();
+    if (rows != cols) {
+      return std::nullopt;
+    }
+
+    std::size_t swaps = 0;
+    T pivot = T{1};
+    JaggedArrayMatrix a = *this;
+
+    if (rows < 2) {
+      return std::pair{std::move(a), swaps};
+    }
+
+    for (std::size_t k : std::views::iota(0uz, rows - 1)) {
+      std::size_t r{k};
+      while (r < rows && a[r, k] == 0) {
+        ++r;
+      }
+
+      if (r == rows) {
+        break;
+      }
+
+      if (r != k) {
+        a.swap_rows(k, r);
+        ++swaps;
+      }
+
+      for (std::size_t i : std::views::iota(k + 1, rows)) {
+        for (std::size_t j : std::views::iota(k + 1, rows)) {
+          a[i, j] = (a[i, j] * a[k, k] - a[i, k] * a[k, j]) / pivot;
+        }
+      }
+
+      pivot = a[k, k];
+    }
+
+    return std::pair{std::move(a), swaps};
+  }
+
   std::optional<T> det() const {
     T det = T{1};
     if constexpr (std::is_floating_point_v<T>) {
@@ -302,10 +344,20 @@ public:
       }
 
       return sign * det;
+    } else if constexpr (std::is_integral_v<T>) {
+      auto bareiss = bareiss_decompose();
+      if (!bareiss) {
+        return std::nullopt;
+      }
+
+      auto& [decomp, swaps] = *bareiss;
+      auto sign = (swaps % 2) ? T{-1} : T{1};
+      auto n = decomp.rows();
+
+      return sign * decomp[n - 1, n - 1];
     }
-    else if constexpr (std::is_integral_v<T>) {
-      return std::nullopt;
-    }
+
+    return std::nullopt;
   }
 
 private:
