@@ -95,10 +95,18 @@ public:
 
     auto rows = lhs.rows();
     auto cols = lhs.cols();
+
     for (std::size_t i : std::views::iota(0uz, rows)) {
       for (std::size_t j : std::views::iota(0uz, cols)) {
-        if (lhs[i, j] != rhs[i, j]) {
-          return false;
+        if constexpr (std::is_floating_point_v<T>) {
+          if (!are_equal(lhs[i, j], rhs[i, j],
+                         std::numeric_limits<T>::epsilon() * std::max(lhs[i, j], rhs[i, j]))) {
+            return false;
+          }
+        } else {
+          if (lhs[i, j] != rhs[i, j]) {
+            return false;
+          }
         }
       }
     }
@@ -180,7 +188,11 @@ public:
     auto cols = array_.cols();
     for (std::size_t i : std::views::iota(0uz, rows)) {
       for (std::size_t j : std::views::iota(0uz, cols)) {
-        std::print(os, "{:8.3f}", (*this)[i, j]);
+        if constexpr (std::is_floating_point_v<T>) {
+          std::print(os, "{:8.3f}", (*this)[i, j]);
+        } else if constexpr (std::is_integral_v<T>) {
+          std::print(os, "{:3}", (*this)[i, j]);
+        }
       }
       std::println(os);
     }
