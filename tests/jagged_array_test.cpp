@@ -67,7 +67,8 @@ TEST(JaggedArrayTest, CopyAssignment) {
     SCOPED_TRACE("test vector: " + ::testing::PrintToString(test_array.values));
     array::JaggedArray<int> array(test_array.rows, test_array.cols, test_array.values.begin(),
                                   test_array.values.end());
-    array::JaggedArray<int> copy_array = array;
+    array::JaggedArray<int> copy_array(test_array.rows, test_array.cols, 0);
+    copy_array = array;
     EXPECT_EQ(test_array.rows, copy_array.rows());
     EXPECT_EQ(test_array.cols, copy_array.cols());
     for (std::size_t i : std::views::iota(0uz, test_array.rows)) {
@@ -83,7 +84,8 @@ TEST(JaggedArrayTest, MoveAssignment) {
     SCOPED_TRACE("test vector: " + ::testing::PrintToString(test_array.values));
     array::JaggedArray<int> array(test_array.rows, test_array.cols, test_array.values.begin(),
                                   test_array.values.end());
-    array::JaggedArray<int> move_array = std::move(array);
+    array::JaggedArray<int> move_array(test_array.rows, test_array.cols, 0);
+    move_array = std::move(array);
     EXPECT_EQ(test_array.rows, move_array.rows());
     EXPECT_EQ(test_array.cols, move_array.cols());
     for (std::size_t i : std::views::iota(0uz, test_array.rows)) {
