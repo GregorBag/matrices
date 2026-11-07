@@ -1,5 +1,6 @@
 add_executable(
     hwmn_test
+    jagged_array_test.cpp
     jagged_array_matrix_test.cpp
 )
 
