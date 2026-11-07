@@ -6,8 +6,6 @@ module;
 
 export module jagged_array;
 
-import array;
-
 namespace array {
 
 export template <typename T>

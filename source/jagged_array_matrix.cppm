@@ -1,5 +1,6 @@
 module;
 
+#include <algorithm>
 #include <cmath>
 #include <cstddef>
 #include <iostream>
@@ -18,6 +19,9 @@ import jagged_array;
 import floating_point_comparing;
 
 namespace matrices {
+
+export template <typename T>
+struct DecompositionResult;
 
 export template <typename T>
 class JaggedArrayMatrix final {
@@ -245,7 +249,7 @@ public:
     return trace;
   }
 
-  std::optional<std::pair<JaggedArrayMatrix, std::size_t>> lup_decompose() const {
+  std::optional<DecompositionResult<T>> lup_decompose() const {
     auto rows = array_.rows();
     auto cols = array_.cols();
     if (rows != cols) {
@@ -255,9 +259,16 @@ public:
     std::size_t swaps = 0;
     JaggedArrayMatrix a = *this;
 
+    std::vector<T> column_scale(cols, T{0});
+    for (std::size_t i : std::views::iota(0uz, rows)) {
+      for (std::size_t j : std::views::iota(0uz, cols)) {
+        column_scale[j] = std::max(column_scale[j], std::abs(a[i, j]));
+      }
+    }
+
     for (std::size_t k : std::views::iota(0uz, rows)) {
       std::size_t k_prime = k;
-      T p{0};
+      T p = T{0};
       for (std::size_t i : std::views::iota(k, rows)) {
         if (std::abs(a[i, k]) > p) {
           p = std::abs(a[i, k]);
@@ -265,9 +276,9 @@ public:
         }
       }
 
-      auto max_elem = a.get_max_elem();
-      if (cmp::are_equal(p, T{0}, max_elem * rows * std::numeric_limits<T>::epsilon())) {
-        break;
+      if (cmp::are_equal(
+          p, T{0}, column_scale[k] * static_cast<T>(rows) * std::numeric_limits<T>::epsilon())) {
+        return DecompositionResult<T>{std::move(a), swaps, true};
       }
 
       if (k != k_prime) {
@@ -283,10 +294,10 @@ public:
       }
     }
 
-    return std::pair{std::move(a), swaps};
+    return DecompositionResult<T>{std::move(a), swaps, false};
   }
 
-  std::optional<std::pair<JaggedArrayMatrix, std::size_t>> bareiss_decompose() const {
+  std::optional<DecompositionResult<T>> bareiss_decompose() const {
     auto rows = array_.rows();
     auto cols = array_.cols();
     if (rows != cols) {
@@ -298,7 +309,7 @@ public:
     JaggedArrayMatrix a = *this;
 
     if (rows < 2) {
-      return std::pair{std::move(a), swaps};
+      return DecompositionResult<T>{std::move(a), swaps, false};
     }
 
     for (std::size_t k : std::views::iota(0uz, rows - 1)) {
@@ -308,7 +319,7 @@ public:
       }
 
       if (r == rows) {
-        break;
+        return DecompositionResult<T>{std::move(a), swaps, true};
       }
 
       if (r != k) {
@@ -325,18 +336,31 @@ public:
       pivot = a[k, k];
     }
 
-    return std::pair{std::move(a), swaps};
+    return DecompositionResult<T>{std::move(a), swaps, false};
   }
 
   std::optional<T> det() const {
+    if (!is_square()) {
+      return std::nullopt;
+    }
+
+    if (!rows()) {
+      return T{1};
+    }
+
     T det = T{1};
+
     if constexpr (std::is_floating_point_v<T>) {
       auto lup = lup_decompose();
       if (!lup) {
         return std::nullopt;
       }
 
-      auto& [decomp, swaps] = *lup;
+      auto& [decomp, swaps, is_singular] = *lup;
+      if (is_singular) {
+        return T{0};
+      }
+
       auto sign = (swaps % 2) ? T{-1} : T{1};
       auto n = decomp.rows();
       for (std::size_t i : std::views::iota(0uz, n)) {
@@ -350,7 +374,11 @@ public:
         return std::nullopt;
       }
 
-      auto& [decomp, swaps] = *bareiss;
+      auto& [decomp, swaps, is_singular] = *bareiss;
+      if (is_singular) {
+        return T{0};
+      }
+
       auto sign = (swaps % 2) ? T{-1} : T{1};
       auto n = decomp.rows();
 
@@ -362,6 +390,13 @@ public:
 
 private:
   array::JaggedArray<T> array_;
+};
+
+export template <typename T>
+struct DecompositionResult {
+  JaggedArrayMatrix<T> matrix;
+  std::size_t swaps;
+  bool is_singular;
 };
 
 }  // namespace matrices
