@@ -103,8 +103,9 @@ public:
     for (std::size_t i : std::views::iota(0uz, rows)) {
       for (std::size_t j : std::views::iota(0uz, cols)) {
         if constexpr (std::is_floating_point_v<T>) {
-          if (!are_equal(lhs[i, j], rhs[i, j],
-                         std::numeric_limits<T>::epsilon() * std::max(lhs[i, j], rhs[i, j]))) {
+          if (!cmp::are_equal(lhs[i, j], rhs[i, j],
+                              std::numeric_limits<T>::epsilon() *
+                              std::max(std::abs(lhs[i, j]), std::abs(rhs[i, j])))) {
             return false;
           }
         } else {
