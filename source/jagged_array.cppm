@@ -1,6 +1,8 @@
 module;
 
+#include <algorithm>
 #include <cstddef>
+#include <initializer_list>
 #include <ranges>
 #include <utility>
 
@@ -21,15 +23,17 @@ public:
     }
   }
 
-  template <typename It>
-  JaggedArray(std::size_t rows, std::size_t cols, It start, It finish) :
-    rows_(rows), cols_(cols), ptr_(rows > 0 ? new T* [rows] {} : nullptr) {
+  JaggedArray(std::initializer_list<std::initializer_list<T>> values) :
+    rows_(values.size()), cols_(0), ptr_(rows_ > 0 ? new T* [rows_] {} : nullptr) {
+    for (const auto& row : values) {
+      cols_ = std::max(cols_, row.size());
+    }
+
+    auto row = values.begin();
     for (std::size_t i : std::views::iota(0uz, rows_)) {
-      ptr_[i] = new T[cols]{};
-      for (std::size_t j = 0; j < cols && start != finish; j++) {
-        ptr_[i][j] = *start;
-        start++;
-      }
+      ptr_[i] = new T[cols_]{};
+      std::copy(row->begin(), row->end(), ptr_[i]);
+      ++row;
     }
   }
 

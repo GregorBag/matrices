@@ -36,7 +36,12 @@ int main() {
     return 1;
   }
 
-  matrices::JaggedArrayMatrix<double> matrix(n, n, v.begin(), v.end());
+  matrices::JaggedArrayMatrix<double> matrix(n, n);
+  for (std::size_t i : std::views::iota(0uz, n)) {
+    for (std::size_t j : std::views::iota(0uz, n)) {
+      matrix[i, j] = v[i * n + j];
+    }
+  }
 
   auto d = matrix.det();
   if (!d) {

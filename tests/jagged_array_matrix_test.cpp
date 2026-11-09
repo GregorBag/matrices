@@ -10,6 +10,33 @@
 
 import jagged_array_matrix;
 
+namespace {
+
+template <typename T>
+matrices::JaggedArrayMatrix<T> make_matrix(std::size_t rows, std::size_t cols,
+                                           const std::vector<T>& values) {
+  matrices::JaggedArrayMatrix<T> result(rows, cols);
+  for (std::size_t i : std::views::iota(0uz, rows)) {
+    for (std::size_t j : std::views::iota(0uz, cols)) {
+      result[i, j] = values[i * cols + j];
+    }
+  }
+  return result;
+}
+
+}  // namespace
+
+TEST(JaggedArrayMatrixTest, InitializerListConstructor) {
+  const matrices::JaggedArrayMatrix<int> matrix{{1, 2, 3}, {4, 5, 6}};
+  EXPECT_EQ(matrix.rows(), 2);
+  EXPECT_EQ(matrix.cols(), 3);
+  for (std::size_t i : std::views::iota(0uz, matrix.rows())) {
+    for (std::size_t j : std::views::iota(0uz, matrix.cols())) {
+      EXPECT_EQ((matrix[i, j]), static_cast<int>(i * matrix.cols() + j + 1));
+    }
+  }
+}
+
 // Checks det() on fixed integer matrices of orders 1 through 6:
 // exact values and signs, singularity, row swaps, and int boundary values
 // without overflowing intermediate calculations.
@@ -87,8 +114,7 @@ TEST(JaggedArrayMatrixTest, IntegerDeterminantTest) {
   for (const auto& test : test_cases) {
     SCOPED_TRACE("test vector: " + ::testing::PrintToString(test.values));
 
-    matrices::JaggedArrayMatrix<int> matrix{test.size, test.size, test.values.begin(),
-                                            test.values.end()};
+    auto matrix = make_matrix(test.size, test.size, test.values);
     auto det = matrix.det();
     EXPECT_EQ(det, test.det);
   }
@@ -117,7 +143,7 @@ TEST(JaggedArrayMatrixTest, ExhaustiveSmallIntegerDeterminants) {
                            v[0] * (v[4] * v[8] - v[5] * v[7]) - v[1] * (v[3] * v[8] - v[5] * v[6]) +
                            v[2] * (v[3] * v[7] - v[4] * v[6]);
       SCOPED_TRACE("test vector: " + ::testing::PrintToString(v));
-      matrices::JaggedArrayMatrix<int> matrix{size, size, v.begin(), v.end()};
+      auto matrix = make_matrix(size, size, v);
       EXPECT_EQ(matrix.det(), expected);
     }
   }
@@ -140,7 +166,7 @@ TEST(JaggedArrayMatrixTest, AllPermutationDeterminantsThroughOrderSix) {
         }
       }
       SCOPED_TRACE("permutation: " + ::testing::PrintToString(permutation));
-      matrices::JaggedArrayMatrix<int> matrix{size, size, values.begin(), values.end()};
+      auto matrix = make_matrix(size, size, values);
       EXPECT_EQ(matrix.det(), inversions % 2 == 0 ? 1 : -1);
     } while (std::next_permutation(permutation.begin(), permutation.end()));
   }
@@ -210,7 +236,7 @@ TEST(JaggedArrayMatrixTest, EmptyFloatingDeterminantIsOne) {
 // Checks a result beyond the 32-bit int range to detect unintended narrowing.
 TEST(JaggedArrayMatrixTest, WideIntegerDeterminant) {
   const std::vector<std::int64_t> values{100000, 1, 1, 100000};
-  matrices::JaggedArrayMatrix<std::int64_t> matrix{2, 2, values.begin(), values.end()};
+  auto matrix = make_matrix<std::int64_t>(2, 2, values);
   EXPECT_EQ(matrix.det(), INT64_C(9999999999));
 }
 
@@ -260,8 +286,7 @@ TEST(JaggedArrayMatrixTest, FloatingDeterminantTest) {
   };
   for (const auto& test : test_cases) {
     SCOPED_TRACE("test vector: " + ::testing::PrintToString(test.values));
-    matrices::JaggedArrayMatrix<double> matrix{test.size, test.size, test.values.begin(),
-                                               test.values.end()};
+    auto matrix = make_matrix(test.size, test.size, test.values);
     const auto actual = matrix.det();
     ASSERT_TRUE(actual.has_value());
     // Relative tolerance preserves sensitivity for very small determinants.
@@ -275,7 +300,7 @@ TEST(JaggedArrayMatrixTest, FloatingDeterminantTest) {
 // decomposition must modify a working copy rather than the input matrix.
 TEST(JaggedArrayMatrixTest, DeterminantDoesNotModifyMatrix) {
   const std::vector<int> values{0, 2, 1, 0, 3, 4, 5, 6, 7};
-  const matrices::JaggedArrayMatrix<int> matrix{3, 3, values.begin(), values.end()};
+  const auto matrix = make_matrix<int>(3, 3, values);
   EXPECT_EQ(matrix.det(), 25);
   EXPECT_EQ(matrix.det(), 25);
   for (std::size_t i = 0; i < 3; ++i) {

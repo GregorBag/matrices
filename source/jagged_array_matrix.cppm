@@ -3,6 +3,7 @@ module;
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <initializer_list>
 #include <iostream>
 #include <limits>
 #include <optional>
@@ -29,16 +30,15 @@ public:
   explicit JaggedArrayMatrix(std::size_t rows, std::size_t cols, T val = T{}) :
     array_(rows, cols, val) {}
 
-  template <typename It>
-  explicit JaggedArrayMatrix(std::size_t rows, std::size_t cols, It start, It finish) :
-    array_(rows, cols, start, finish) {}
+  JaggedArrayMatrix(std::initializer_list<std::initializer_list<T>> values) :
+    array_(values) {}
 
   static JaggedArrayMatrix eye(std::size_t n) {
-    std::vector<T> v(n * n, T{0});
+    JaggedArrayMatrix result(n, n, T{0});
     for (std::size_t i : std::views::iota(0uz, n)) {
-      v[i * n + i] = T{1};
+      result[i, i] = T{1};
     }
-    return JaggedArrayMatrix(n, n, v.begin(), v.end());
+    return result;
   }
 
   T& operator[](std::size_t i, std::size_t j) { return array_[i, j]; }
