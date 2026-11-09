@@ -6,6 +6,8 @@
 #include <limits>
 #include <numeric>
 #include <ranges>
+#include <stdexcept>
+#include <type_traits>
 #include <vector>
 
 import jagged_array_matrix;
@@ -24,6 +26,46 @@ matrices::JaggedArrayMatrix<T> make_matrix(std::size_t rows, std::size_t cols,
   return result;
 }
 
+// Compare elements directly so arithmetic tests do not depend on operator==.
+template <typename T>
+void expect_matrix(const matrices::JaggedArrayMatrix<T>& matrix, std::size_t rows, std::size_t cols,
+                   const std::vector<T>& values) {
+  ASSERT_EQ(matrix.rows(), rows);
+  ASSERT_EQ(matrix.cols(), cols);
+  ASSERT_EQ(values.size(), rows * cols);
+  for (std::size_t i = 0; i < rows; ++i) {
+    for (std::size_t j = 0; j < cols; ++j) {
+      SCOPED_TRACE(::testing::Message() << "row=" << i << ", col=" << j);
+      if constexpr (std::is_floating_point_v<T>) {
+        EXPECT_DOUBLE_EQ((matrix[i, j]), values[i * cols + j]);
+      } else {
+        EXPECT_EQ((matrix[i, j]), values[i * cols + j]);
+      }
+    }
+  }
+}
+
+struct ArithmeticTestCase {
+  std::size_t rows;
+  std::size_t cols;
+  std::vector<int> lhs;
+  std::vector<int> rhs;
+  std::vector<int> sum;
+  std::vector<int> diff;
+};
+
+const std::vector<ArithmeticTestCase> arithmetic_cases = {
+  {0, 0, {}, {}, {}, {}},
+  {0, 3, {}, {}, {}, {}},
+  {3, 0, {}, {}, {}, {}},
+  {1, 1, {-7}, {3}, {-4}, {-10}},
+  {1, 3, {0, 2, -3}, {4, -2, 1}, {4, 0, -2}, {-4, 4, -4}},
+  {3, 1, {0, 2, -3}, {4, -2, 1}, {4, 0, -2}, {-4, 4, -4}},
+  {2, 3, {1, -2, 0, 4, 5, -6}, {6, 2, -3, -4, 0, 1}, {7, 0, -3, 0, 5, -5}, {-5, -4, 3, 8, 5, -7}},
+  {3, 2, {1, -2, 0, 4, 5, -6}, {6, 2, -3, -4, 0, 1}, {7, 0, -3, 0, 5, -5}, {-5, -4, 3, 8, 5, -7}},
+  {2, 2, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}, {0, 0, 0, 0}},
+};
+
 }  // namespace
 
 TEST(JaggedArrayMatrixTest, InitializerListConstructor) {
@@ -35,6 +77,419 @@ TEST(JaggedArrayMatrixTest, InitializerListConstructor) {
       EXPECT_EQ((matrix[i, j]), static_cast<int>(i * matrix.cols() + j + 1));
     }
   }
+}
+
+TEST(JaggedArrayMatrixTest, Negate) {
+  struct TestCase {
+    std::size_t rows;
+    std::size_t cols;
+    std::vector<int> values;
+    std::vector<int> expected;
+  };
+  const std::vector<TestCase> cases = {
+    {0, 0, {}, {}},
+    {0, 3, {}, {}},
+    {3, 0, {}, {}},
+    {1, 1, {-7}, {7}},
+    {1, 3, {0, 2, -3}, {0, -2, 3}},
+    {3, 1, {0, 2, -3}, {0, -2, 3}},
+    {2, 3, {1, -2, 0, 4, 5, -6}, {-1, 2, 0, -4, -5, 6}},
+    {2, 2, {0, 0, 0, 0}, {0, 0, 0, 0}},
+    // INT_MIN cannot be negated without signed overflow.
+    {1,
+     2,
+     {std::numeric_limits<int>::max(), -std::numeric_limits<int>::max()},
+     {-std::numeric_limits<int>::max(), std::numeric_limits<int>::max()}},
+  };
+  for (const auto& test : cases) {
+    SCOPED_TRACE(::testing::Message()
+                 << test.rows << 'x' << test.cols << ": " << ::testing::PrintToString(test.values));
+    auto matrix = make_matrix(test.rows, test.cols, test.values);
+    EXPECT_EQ(&matrix.negate(), &matrix);
+    expect_matrix(matrix, test.rows, test.cols, test.expected);
+    matrix.negate();
+    expect_matrix(matrix, test.rows, test.cols, test.values);
+  }
+}
+
+TEST(JaggedArrayMatrixTest, Transpose) {
+  struct TestCase {
+    std::size_t rows;
+    std::size_t cols;
+    std::vector<int> values;
+    std::vector<int> expected;
+  };
+  const std::vector<TestCase> cases = {
+    {0, 0, {}, {}},
+    {0, 3, {}, {}},
+    {3, 0, {}, {}},
+    {1, 1, {-7}, {-7}},
+    {1, 3, {1, -2, 3}, {1, -2, 3}},
+    {3, 1, {1, -2, 3}, {1, -2, 3}},
+    {2, 2, {1, 2, 3, 4}, {1, 3, 2, 4}},
+    {2, 3, {1, 2, 3, 4, 5, 6}, {1, 4, 2, 5, 3, 6}},
+    {3, 2, {1, 2, 3, 4, 5, 6}, {1, 3, 5, 2, 4, 6}},
+  };
+  for (const auto& test : cases) {
+    SCOPED_TRACE(::testing::Message() << test.rows << 'x' << test.cols);
+    auto matrix = make_matrix(test.rows, test.cols, test.values);
+    EXPECT_EQ(&matrix.transpose(), &matrix);
+    expect_matrix(matrix, test.cols, test.rows, test.expected);
+    matrix.transpose();
+    expect_matrix(matrix, test.rows, test.cols, test.values);
+  }
+}
+
+TEST(JaggedArrayMatrixTest, AddAssignment) {
+  for (const auto& test : arithmetic_cases) {
+    SCOPED_TRACE(::testing::Message() << test.rows << 'x' << test.cols);
+    auto lhs = make_matrix(test.rows, test.cols, test.lhs);
+    const auto rhs = make_matrix(test.rows, test.cols, test.rhs);
+    EXPECT_EQ(&(lhs += rhs), &lhs);
+    expect_matrix(lhs, test.rows, test.cols, test.sum);
+    expect_matrix(rhs, test.rows, test.cols, test.rhs);
+  }
+}
+
+TEST(JaggedArrayMatrixTest, SubtractAssignment) {
+  for (const auto& test : arithmetic_cases) {
+    SCOPED_TRACE(::testing::Message() << test.rows << 'x' << test.cols);
+    auto lhs = make_matrix(test.rows, test.cols, test.lhs);
+    const auto rhs = make_matrix(test.rows, test.cols, test.rhs);
+    EXPECT_EQ(&(lhs -= rhs), &lhs);
+    expect_matrix(lhs, test.rows, test.cols, test.diff);
+    expect_matrix(rhs, test.rows, test.cols, test.rhs);
+  }
+}
+
+TEST(JaggedArrayMatrixTest, SelfAdditionAndSubtraction) {
+  auto matrix = make_matrix<int>(2, 3, {1, -2, 0, 4, 5, -6});
+  EXPECT_EQ(&(matrix += matrix), &matrix);
+  expect_matrix(matrix, 2, 3, {2, -4, 0, 8, 10, -12});
+  EXPECT_EQ(&(matrix -= matrix), &matrix);
+  expect_matrix(matrix, 2, 3, {0, 0, 0, 0, 0, 0});
+}
+
+TEST(JaggedArrayMatrixTest, Sum) {
+  for (const auto& test : arithmetic_cases) {
+    SCOPED_TRACE(::testing::Message() << test.rows << 'x' << test.cols);
+    const auto lhs = make_matrix(test.rows, test.cols, test.lhs);
+    const auto rhs = make_matrix(test.rows, test.cols, test.rhs);
+    auto result = matrices::JaggedArrayMatrix<int>::sum(lhs, rhs);
+    expect_matrix(result, test.rows, test.cols, test.sum);
+    if (test.rows && test.cols) {
+      result[0, 0] = 123;
+    }
+    expect_matrix(lhs, test.rows, test.cols, test.lhs);
+    expect_matrix(rhs, test.rows, test.cols, test.rhs);
+  }
+}
+
+TEST(JaggedArrayMatrixTest, Diff) {
+  for (const auto& test : arithmetic_cases) {
+    SCOPED_TRACE(::testing::Message() << test.rows << 'x' << test.cols);
+    const auto lhs = make_matrix(test.rows, test.cols, test.lhs);
+    const auto rhs = make_matrix(test.rows, test.cols, test.rhs);
+    auto result = matrices::JaggedArrayMatrix<int>::diff(lhs, rhs);
+    expect_matrix(result, test.rows, test.cols, test.diff);
+    if (test.rows && test.cols) {
+      result[0, 0] = 123;
+    }
+    expect_matrix(lhs, test.rows, test.cols, test.lhs);
+    expect_matrix(rhs, test.rows, test.cols, test.rhs);
+  }
+}
+
+TEST(JaggedArrayMatrixTest, SumAndDiffWithSameOperand) {
+  const auto matrix = make_matrix<int>(2, 3, {1, -2, 0, 4, 5, -6});
+  using Matrix = matrices::JaggedArrayMatrix<int>;
+  expect_matrix(Matrix::sum(matrix, matrix), 2, 3, {2, -4, 0, 8, 10, -12});
+  expect_matrix(Matrix::diff(matrix, matrix), 2, 3, {0, 0, 0, 0, 0, 0});
+  expect_matrix(matrix, 2, 3, {1, -2, 0, 4, 5, -6});
+}
+
+TEST(JaggedArrayMatrixTest, AdditionAndSubtractionRejectDifferentShapes) {
+  using Matrix = matrices::JaggedArrayMatrix<int>;
+  // Include equal element counts, a single differing dimension, and empty shapes.
+  for (std::size_t rows = 0; rows <= 3; ++rows) {
+    for (std::size_t cols = 0; cols <= 3; ++cols) {
+      for (std::size_t rhs_rows = 0; rhs_rows <= 3; ++rhs_rows) {
+        for (std::size_t rhs_cols = 0; rhs_cols <= 3; ++rhs_cols) {
+          if (rows == rhs_rows && cols == rhs_cols) {
+            continue;
+          }
+          SCOPED_TRACE(::testing::Message()
+                       << rows << 'x' << cols << " and " << rhs_rows << 'x' << rhs_cols);
+          Matrix lhs(rows, cols, 7);
+          const Matrix rhs(rhs_rows, rhs_cols, -2);
+          EXPECT_THROW(lhs += rhs, std::invalid_argument);
+          expect_matrix(lhs, rows, cols, std::vector<int>(rows * cols, 7));
+          EXPECT_THROW(lhs -= rhs, std::invalid_argument);
+          expect_matrix(lhs, rows, cols, std::vector<int>(rows * cols, 7));
+          EXPECT_THROW(Matrix::sum(lhs, rhs), std::invalid_argument);
+          EXPECT_THROW(Matrix::diff(lhs, rhs), std::invalid_argument);
+          expect_matrix(lhs, rows, cols, std::vector<int>(rows * cols, 7));
+          expect_matrix(rhs, rhs_rows, rhs_cols, std::vector<int>(rhs_rows * rhs_cols, -2));
+        }
+      }
+    }
+  }
+}
+
+TEST(JaggedArrayMatrixTest, Equality) {
+  for (const auto& test : arithmetic_cases) {
+    SCOPED_TRACE(::testing::Message() << test.rows << 'x' << test.cols);
+    const auto lhs = make_matrix(test.rows, test.cols, test.lhs);
+    auto rhs = make_matrix(test.rows, test.cols, test.lhs);
+    EXPECT_TRUE(lhs == lhs);
+    EXPECT_TRUE(lhs == rhs);
+    EXPECT_TRUE(rhs == lhs);
+    // A difference at any position must be found, including the last element.
+    for (std::size_t i = 0; i < test.rows; ++i) {
+      for (std::size_t j = 0; j < test.cols; ++j) {
+        SCOPED_TRACE(::testing::Message() << "row=" << i << ", col=" << j);
+        ++rhs[i, j];
+        EXPECT_FALSE(lhs == rhs);
+        EXPECT_FALSE(rhs == lhs);
+        --rhs[i, j];
+      }
+    }
+  }
+}
+
+TEST(JaggedArrayMatrixTest, EqualityRejectsDifferentShapes) {
+  for (std::size_t rows = 0; rows <= 3; ++rows) {
+    for (std::size_t cols = 0; cols <= 3; ++cols) {
+      for (std::size_t rhs_rows = 0; rhs_rows <= 3; ++rhs_rows) {
+        for (std::size_t rhs_cols = 0; rhs_cols <= 3; ++rhs_cols) {
+          SCOPED_TRACE(::testing::Message()
+                       << rows << 'x' << cols << " and " << rhs_rows << 'x' << rhs_cols);
+          const matrices::JaggedArrayMatrix<int> lhs(rows, cols, 0);
+          const matrices::JaggedArrayMatrix<int> rhs(rhs_rows, rhs_cols, 0);
+          EXPECT_EQ(lhs == rhs, rows == rhs_rows && cols == rhs_cols);
+        }
+      }
+    }
+  }
+}
+
+template <typename T>
+class JaggedArrayMatrixFloatingEqualityTest : public ::testing::Test {};
+
+using FloatingTypes = ::testing::Types<float, double>;
+TYPED_TEST_SUITE(JaggedArrayMatrixFloatingEqualityTest, FloatingTypes);
+
+TYPED_TEST(JaggedArrayMatrixFloatingEqualityTest, EqualValuesIncludingNegativeAndZero) {
+  using T = TypeParam;
+  for (T value : {T{0}, T{1}, T{-1}, T{0.5}, T{-0.5}}) {
+    SCOPED_TRACE(::testing::Message() << "value=" << value);
+    const matrices::JaggedArrayMatrix<T> lhs(2, 3, value);
+    const matrices::JaggedArrayMatrix<T> rhs(2, 3, value);
+    EXPECT_TRUE(lhs == lhs);
+    EXPECT_TRUE(lhs == rhs);
+    EXPECT_TRUE(rhs == lhs);
+  }
+  const matrices::JaggedArrayMatrix<T> positive_zero(1, 1, T{0});
+  const matrices::JaggedArrayMatrix<T> negative_zero(1, 1, -T{0});
+  EXPECT_TRUE(positive_zero == negative_zero);
+}
+
+TYPED_TEST(JaggedArrayMatrixFloatingEqualityTest, RelativeToleranceIsSymmetric) {
+  using T = TypeParam;
+  const T epsilon = std::numeric_limits<T>::epsilon();
+  for (T value : {T{1}, T{-1}, T{1024}, T{-1024}}) {
+    SCOPED_TRACE(::testing::Message() << "value=" << value);
+    const matrices::JaggedArrayMatrix<T> lhs(1, 1, value);
+    const matrices::JaggedArrayMatrix<T> near(1, 1, std::nextafter(value, T{0}));
+    const matrices::JaggedArrayMatrix<T> far(1, 1, value * (T{1} + T{8} * epsilon));
+    EXPECT_TRUE(lhs == near);
+    EXPECT_TRUE(near == lhs);
+    EXPECT_FALSE(lhs == far);
+    EXPECT_FALSE(far == lhs);
+  }
+}
+
+TEST(JaggedArrayMatrixTest, Scale) {
+  struct TestCase {
+    int factor;
+    std::vector<int> expected;
+  };
+  const std::vector<int> values{1, -2, 0, 4, 5, -6};
+  const std::vector<TestCase> cases = {
+    {0, {0, 0, 0, 0, 0, 0}},       {1, values},
+    {-1, {-1, 2, 0, -4, -5, 6}},   {3, {3, -6, 0, 12, 15, -18}},
+    {-2, {-2, 4, 0, -8, -10, 12}},
+  };
+  using Matrix = matrices::JaggedArrayMatrix<int>;
+  for (const auto& test : cases) {
+    SCOPED_TRACE(::testing::Message() << "factor=" << test.factor);
+    const auto matrix = make_matrix(2, 3, values);
+    auto left = Matrix::scale(test.factor, matrix);
+    auto right = Matrix::scale(matrix, test.factor);
+    expect_matrix(left, 2, 3, test.expected);
+    expect_matrix(right, 2, 3, test.expected);
+    left[0, 0] = 123;
+    right[1, 2] = 456;
+    expect_matrix(matrix, 2, 3, values);
+  }
+  for (const auto& test : arithmetic_cases) {
+    const Matrix zero(test.rows, test.cols, 0);
+    const std::vector<int> zeros(test.rows * test.cols, 0);
+    expect_matrix(Matrix::scale(zero, -3), test.rows, test.cols, zeros);
+    expect_matrix(Matrix::scale(-3, zero), test.rows, test.cols, zeros);
+  }
+}
+
+TEST(JaggedArrayMatrixTest, Product) {
+  struct TestCase {
+    std::size_t rows;
+    std::size_t inner;
+    std::size_t cols;
+    std::vector<int> lhs;
+    std::vector<int> rhs;
+    std::vector<int> expected;
+  };
+  const std::vector<TestCase> cases = {
+    {1, 1, 1, {-3}, {4}, {-12}},
+    {2, 3, 2, {1, 2, 3, 4, 5, 6}, {7, 8, 9, 10, 11, 12}, {58, 64, 139, 154}},
+    {3,
+     2,
+     4,
+     {1, -2, 0, 3, -1, 4},
+     {2, 0, -3, 1, 4, -1, 2, 5},
+     {-6, 2, -7, -9, 12, -3, 6, 15, 14, -4, 11, 19}},
+    {2, 2, 2, {1, 2, 3, 4}, {0, 1, -1, 2}, {-2, 5, -4, 11}},
+    {2, 2, 2, {0, 1, -1, 2}, {1, 2, 3, 4}, {3, 4, 5, 6}},
+    {1, 3, 1, {-1, 2, 3}, {4, -1, 6}, {12}},
+    {3, 1, 2, {1, -2, 0}, {3, -4}, {3, -4, -6, 8, 0, 0}},
+    {2, 2, 3, {0, 0, 0, 0}, {1, 2, 3, 4, 5, 6}, {0, 0, 0, 0, 0, 0}},
+    {2, 3, 2, {1, 2, 3, 4, 5, 6}, {0, 0, 0, 0, 0, 0}, {0, 0, 0, 0}},
+    {0, 0, 0, {}, {}, {}},
+    {0, 2, 3, {}, {1, 2, 3, 4, 5, 6}, {}},
+    {2, 3, 0, {1, 2, 3, 4, 5, 6}, {}, {}},
+    {2, 0, 3, {}, {}, {0, 0, 0, 0, 0, 0}},
+  };
+  for (const auto& test : cases) {
+    SCOPED_TRACE(::testing::Message()
+                 << test.rows << 'x' << test.inner << " times " << test.inner << 'x' << test.cols);
+    const auto lhs = make_matrix(test.rows, test.inner, test.lhs);
+    const auto rhs = make_matrix(test.inner, test.cols, test.rhs);
+    auto result = matrices::JaggedArrayMatrix<int>::product(lhs, rhs);
+    expect_matrix(result, test.rows, test.cols, test.expected);
+    if (test.rows && test.cols) {
+      result[0, 0] = 123;
+    }
+    expect_matrix(lhs, test.rows, test.inner, test.lhs);
+    expect_matrix(rhs, test.inner, test.cols, test.rhs);
+  }
+}
+
+TEST(JaggedArrayMatrixTest, ProductWithIdentityAndSameOperand) {
+  using Matrix = matrices::JaggedArrayMatrix<int>;
+  const auto rectangular = make_matrix<int>(2, 3, {1, -2, 0, 4, 5, -6});
+  expect_matrix(Matrix::product(Matrix::eye(2), rectangular), 2, 3, {1, -2, 0, 4, 5, -6});
+  expect_matrix(Matrix::product(rectangular, Matrix::eye(3)), 2, 3, {1, -2, 0, 4, 5, -6});
+  const auto square = make_matrix<int>(2, 2, {1, 2, 3, 4});
+  expect_matrix(Matrix::product(square, square), 2, 2, {7, 10, 15, 22});
+  expect_matrix(square, 2, 2, {1, 2, 3, 4});
+}
+
+TEST(JaggedArrayMatrixTest, ProductRejectsIncompatibleDimensions) {
+  using Matrix = matrices::JaggedArrayMatrix<int>;
+  for (std::size_t lhs_cols = 0; lhs_cols <= 3; ++lhs_cols) {
+    for (std::size_t rhs_rows = 0; rhs_rows <= 3; ++rhs_rows) {
+      if (lhs_cols == rhs_rows) {
+        continue;
+      }
+      for (std::size_t outer : {0uz, 2uz}) {
+        SCOPED_TRACE(::testing::Message()
+                     << outer << 'x' << lhs_cols << " times " << rhs_rows << 'x' << outer);
+        const Matrix lhs(outer, lhs_cols, 7);
+        const Matrix rhs(rhs_rows, outer, -2);
+        EXPECT_THROW(Matrix::product(lhs, rhs), std::invalid_argument);
+        expect_matrix(lhs, outer, lhs_cols, std::vector<int>(outer * lhs_cols, 7));
+        expect_matrix(rhs, rhs_rows, outer, std::vector<int>(rhs_rows * outer, -2));
+      }
+    }
+  }
+}
+
+TEST(JaggedArrayMatrixTest, Trace) {
+  struct TestCase {
+    std::size_t size;
+    std::vector<int> values;
+    int expected;
+  };
+  const std::vector<TestCase> cases = {
+    {0, {}, 0},
+    {1, {-7}, -7},
+    {1, {std::numeric_limits<int>::min()}, std::numeric_limits<int>::min()},
+    {1, {std::numeric_limits<int>::max()}, std::numeric_limits<int>::max()},
+    {2, {1, 100, -200, 4}, 5},
+    {2, {-1, 2, 3, -4}, -5},
+    {3, {2, 9, 8, 7, -5, 6, 4, 1, 3}, 0},
+    {3, {1, 0, 0, 0, 1, 0, 0, 0, 1}, 3},
+    {2, {0, 0, 0, 0}, 0},
+  };
+  for (const auto& test : cases) {
+    SCOPED_TRACE("test vector: " + ::testing::PrintToString(test.values));
+    const auto matrix = make_matrix(test.size, test.size, test.values);
+    const auto trace = matrix.tr();
+    ASSERT_TRUE(trace.has_value());
+    EXPECT_EQ(*trace, test.expected);
+    EXPECT_EQ(matrix.tr(), trace);
+    expect_matrix(matrix, test.size, test.size, test.values);
+  }
+}
+
+TEST(JaggedArrayMatrixTest, RectangularTraceIsAbsent) {
+  for (std::size_t rows = 0; rows <= 3; ++rows) {
+    for (std::size_t cols = 0; cols <= 3; ++cols) {
+      if (rows == cols) {
+        continue;
+      }
+      SCOPED_TRACE(::testing::Message() << rows << 'x' << cols);
+      const matrices::JaggedArrayMatrix<int> integers(rows, cols, 1);
+      const matrices::JaggedArrayMatrix<double> floating(rows, cols, 0.5);
+      EXPECT_FALSE(integers.tr().has_value());
+      EXPECT_FALSE(floating.tr().has_value());
+    }
+  }
+}
+
+TEST(JaggedArrayMatrixTest, FractionalArithmetic) {
+  using Matrix = matrices::JaggedArrayMatrix<double>;
+  const auto lhs = make_matrix<double>(2, 2, {0.5, -1.25, 0.0, 2.5});
+  const auto rhs = make_matrix<double>(2, 2, {1.5, 0.25, -2.0, 0.5});
+  auto matrix = lhs;
+  matrix += rhs;
+  expect_matrix(matrix, 2, 2, {2.0, -1.0, -2.0, 3.0});
+  matrix = lhs;
+  matrix -= rhs;
+  expect_matrix(matrix, 2, 2, {-1.0, -1.5, 2.0, 2.0});
+  expect_matrix(Matrix::sum(lhs, rhs), 2, 2, {2.0, -1.0, -2.0, 3.0});
+  expect_matrix(Matrix::diff(lhs, rhs), 2, 2, {-1.0, -1.5, 2.0, 2.0});
+  expect_matrix(Matrix::scale(lhs, -0.5), 2, 2, {-0.25, 0.625, 0.0, -1.25});
+  expect_matrix(Matrix::scale(-0.5, lhs), 2, 2, {-0.25, 0.625, 0.0, -1.25});
+  expect_matrix(Matrix::product(lhs, rhs), 2, 2, {3.25, -0.5, -5.0, 1.25});
+  matrix = lhs;
+  expect_matrix(matrix.negate(), 2, 2, {-0.5, 1.25, 0.0, -2.5});
+  matrix = lhs;
+  expect_matrix(matrix.transpose(), 2, 2, {0.5, 0.0, -1.25, 2.5});
+  ASSERT_TRUE(lhs.tr().has_value());
+  EXPECT_DOUBLE_EQ(*lhs.tr(), 3.0);
+  expect_matrix(lhs, 2, 2, {0.5, -1.25, 0.0, 2.5});
+  expect_matrix(rhs, 2, 2, {1.5, 0.25, -2.0, 0.5});
+}
+
+TEST(JaggedArrayMatrixTest, WideIntegerArithmetic) {
+  using Matrix = matrices::JaggedArrayMatrix<std::int64_t>;
+  const auto matrix = make_matrix<std::int64_t>(1, 1, {INT64_C(3000000000)});
+  expect_matrix(Matrix::sum(matrix, matrix), 1, 1, {INT64_C(6000000000)});
+  expect_matrix(Matrix::scale(matrix, 2), 1, 1, {INT64_C(6000000000)});
+  const auto factor = make_matrix<std::int64_t>(1, 1, {2});
+  expect_matrix(Matrix::product(matrix, factor), 1, 1, {INT64_C(6000000000)});
+  EXPECT_EQ(matrix.tr(), INT64_C(3000000000));
 }
 
 // Checks det() on fixed integer matrices of orders 1 through 6:
