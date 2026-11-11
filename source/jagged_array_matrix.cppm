@@ -168,21 +168,6 @@ public:
   std::size_t rows() const { return array_.rows(); }
   std::size_t cols() const { return array_.cols(); }
 
-  T get_max_elem() const {
-    auto rows = array_.rows();
-    auto cols = array_.cols();
-    T max_elem{0};
-    for (std::size_t i : std::views::iota(0uz, rows)) {
-      for (std::size_t j : std::views::iota(0uz, cols)) {
-        if (max_elem < std::fabs(((*this))[i, j])) {
-          max_elem = std::fabs((*this)[i, j]);
-        }
-      }
-    }
-
-    return max_elem;
-  }
-
   bool is_square() const { return array_.rows() == array_.cols(); }
   bool are_same_shaped(const JaggedArrayMatrix& rhs) const {
     return (array_.rows() == rhs.rows() && array_.cols() == rhs.cols());
